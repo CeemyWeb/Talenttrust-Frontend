@@ -2,9 +2,10 @@
 
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { useMilestonesRouteError } from '@/hooks/useMilestonesRouteError';
 import { ensureValidError, getErrorIdentity } from '@/lib/milestonesErrorUtils';
 import { reportError } from '@/lib/errorReporter';
+import { MILESTONES_RESET_FAILURE_NOTICE } from '@/hooks/useMilestonesRouteError';
+import { MILESTONES_ROUTE_ERROR_CODE } from '@/lib/milestonesRouteError';
 
 type MilestonesErrorProps = {
   error: unknown;
@@ -29,20 +30,36 @@ type MilestonesErrorProps = {
 
 export default function MilestonesError({ error, reset }: MilestonesErrorProps) {
   const sanitized = ensureValidError(error);
+  const errorId = getErrorIdentity(sanitized);
   const [isRetrying, setIsRetrying] = useState(false);
+  const [resetFailed, setResetFailed] = useState(false);
   const reportedError = useRef<Error | null>(null);
 
   useEffect(() => {
-    if (reportedError.current === sanitized) return;
+    if (reportedError.current !== null && getErrorIdentity(reportedError.current) === errorId) return;
     reportedError.current = sanitized;
     setIsRetrying(false);
-    reportError(error, 'Milestones page');
-  }, [error, sanitized]);
+    setResetFailed(false);
+    reportError(sanitized, 'Milestones page', 'error', {
+      code: MILESTONES_ROUTE_ERROR_CODE,
+      name: 'Error',
+    });
+  }, [error, sanitized, errorId]);
 
   const handleRetry = () => {
     if (isRetrying) return;
     setIsRetrying(true);
-    reset();
+    setResetFailed(false);
+    try {
+      reset();
+    } catch (e) {
+      setResetFailed(true);
+      reportError(e, 'Milestones page', 'error', {
+        code: MILESTONES_ROUTE_ERROR_CODE,
+        name: 'Error',
+        phase: 'reset',
+      });
+    }
   };
 
   return (
@@ -54,7 +71,11 @@ export default function MilestonesError({ error, reset }: MilestonesErrorProps) 
         <p className="mt-3 text-slate-600">
           Please try again. Contact support if the problem continues.
         </p>
-        {isRetrying ? (
+        {resetFailed ? (
+          <p className="mt-2 text-sm text-slate-500" role="status">
+            {MILESTONES_RESET_FAILURE_NOTICE}
+          </p>
+        ) : isRetrying ? (
           <p className="mt-2 text-sm text-slate-500" role="status">
             Retrying…
           </p>
@@ -64,6 +85,7 @@ export default function MilestonesError({ error, reset }: MilestonesErrorProps) 
             type="button"
             onClick={handleRetry}
             disabled={isRetrying}
+            aria-disabled={isRetrying}
             aria-describedby="milestones-retry-status"
             className="rounded-xl bg-blue-600 px-4 py-2 font-semibold text-white hover:bg-blue-700 focus-visible:outline focus-visible:outline-4 focus-visible:outline-offset-2 focus-visible:outline-blue-500"
           >
