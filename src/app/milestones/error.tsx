@@ -3,9 +3,11 @@
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useMilestonesRouteError } from '@/hooks/useMilestonesRouteError';
+import { ensureValidError, getErrorIdentity } from '@/lib/milestonesErrorUtils';
+import { reportError } from '@/lib/errorReporter';
 
 type MilestonesErrorProps = {
-  error: Error & { digest?: string };
+  error: unknown;
   reset: () => void;
 };
 
@@ -25,26 +27,17 @@ type MilestonesErrorProps = {
  *    exposed for correlation with server logs.
  */
 
-function getErrorIdentity(error: Error & { digest?: string }): string {
-  if (typeof error.digest === 'string' && error.digest.length > 0) {
-    return `digest:${error.digest}`;
-  }
-
-  // Fall back to a stable identity derived from the error object itself
-  // so re-renders of the same instance do not re-report.
-  return 'object:' + (error.name || 'Error') + ':' + (error.message || '');
-}
-
 export default function MilestonesError({ error, reset }: MilestonesErrorProps) {
+  const sanitized = ensureValidError(error);
   const [isRetrying, setIsRetrying] = useState(false);
   const reportedError = useRef<Error | null>(null);
 
   useEffect(() => {
-    if (reportedError.current === error) return;
-    reportedError.current = error;
+    if (reportedError.current === sanitized) return;
+    reportedError.current = sanitized;
     setIsRetrying(false);
     reportError(error, 'Milestones page');
-  }, [error]);
+  }, [error, sanitized]);
 
   const handleRetry = () => {
     if (isRetrying) return;
