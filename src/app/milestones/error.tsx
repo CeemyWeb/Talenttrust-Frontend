@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
+import { useMilestonesRouteError } from '@/hooks/useMilestonesRouteError';
 import { ensureValidError, getErrorIdentity } from '@/lib/milestonesErrorUtils';
 import { reportError } from '@/lib/errorReporter';
 import { MILESTONES_RESET_FAILURE_NOTICE } from '@/hooks/useMilestonesRouteError';
@@ -29,36 +30,32 @@ type MilestonesErrorProps = {
  */
 
 export default function MilestonesError({ error, reset }: MilestonesErrorProps) {
-  const sanitized = ensureValidError(error);
-  const errorId = getErrorIdentity(sanitized);
   const [isRetrying, setIsRetrying] = useState(false);
   const [resetFailed, setResetFailed] = useState(false);
   const reportedError = useRef<Error | null>(null);
+  const retryInFlightRef = useRef<boolean>(false);
+  const retryCountRef = useRef<number>(0);
 
   useEffect(() => {
-    if (reportedError.current !== null && getErrorIdentity(reportedError.current) === errorId) return;
-    reportedError.current = sanitized;
+    if (reportedError.current === error) return;
+    reportedError.current = error;
     setIsRetrying(false);
     setResetFailed(false);
-    reportError(sanitized, 'Milestones page', 'error', {
+    reportError(error, 'Milestones page', 'error', {
       code: MILESTONES_ROUTE_ERROR_CODE,
       name: 'Error',
     });
-  }, [error, sanitized, errorId]);
+  }, [error]);
 
   const handleRetry = () => {
-    if (isRetrying) return;
+    if (retryInFlightRef.current) return;
+    retryInFlightRef.current = true;
     setIsRetrying(true);
-    setResetFailed(false);
     try {
       reset();
     } catch (e) {
       setResetFailed(true);
-      reportError(e, 'Milestones page', 'error', {
-        code: MILESTONES_ROUTE_ERROR_CODE,
-        name: 'Error',
-        phase: 'reset',
-      });
+      setIsRetrying(false);
     }
   };
 
@@ -75,9 +72,9 @@ export default function MilestonesError({ error, reset }: MilestonesErrorProps) 
           <p className="mt-2 text-sm text-slate-500" role="status">
             {MILESTONES_RESET_FAILURE_NOTICE}
           </p>
-        ) : isRetrying ? (
+        ) : retryCountRef.current > 0 ? (
           <p className="mt-2 text-sm text-slate-500" role="status">
-            Retrying…
+            Retry attempts: {retryCountRef.current}
           </p>
         ) : null}
         <div className="mt-6 flex flex-col justify-center gap-3 sm:flex-row">
