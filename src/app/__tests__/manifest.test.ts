@@ -314,7 +314,59 @@ describe('manifest.ts – concurrent-execution hardening', () => {
     });
   });
 
-  // ── 5. Complete field contract ─────────────────────────────────────────────
+  // ── 5. Deterministic start_url validation and recovery ──────────────────────
+
+  describe('start_url validation and recovery', () => {
+    it('valid root-relative path is preserved', () => {
+      const result = manifest();
+      expect(result.start_url).toBe('/');
+    });
+
+    it('undefined start_url falls back to default', () => {
+      // @ts-expect-error - testing edge case
+      const result = manifest(undefined);
+      expect(result.start_url).toBe('/');
+    });
+
+    it('null start_url falls back to default', () => {
+      // @ts-expect-error - testing edge case
+      const result = manifest(null);
+      expect(result.start_url).toBe('/');
+    });
+
+    it('empty string start_url falls back to default', () => {
+      // @ts-expect-error - testing edge case
+      const result = manifest({ start_url: '' });
+      expect(result.start_url).toBe('/');
+    });
+
+    it('absolute URL start_url falls back to default', () => {
+      // @ts-expect-error - testing edge case
+      const result = manifest({ start_url: 'https://example.com' });
+      expect(result.start_url).toBe('/');
+    });
+
+    it('start_url with leading/trailing whitespace is trimmed', () => {
+      // @ts-expect-error - testing edge case
+      const result = manifest({ start_url: ' / ' });
+      expect(result.start_url).toBe('/');
+    });
+
+    it('start_url is deterministic across retries', () => {
+      const urls = Array.from({ length: 50 }, () => manifest().start_url);
+      const unique = new Set(urls);
+      expect(unique.size).toBe(1);
+      expect(unique.has('/')).toBe(true);
+    });
+
+    it('start_url does not expose internal environment variables', () => {
+      const name = manifest().start_url ?? '';
+      expect(name).not.toMatch(/\$\{/);
+      expect(name).not.toMatch(/process\.env/);
+    });
+  });
+
+  // ── 6. Complete field contract ─────────────────────────────────────────────
 
   describe('complete field contract', () => {
     it('manifest result has all required PWA fields', () => {
