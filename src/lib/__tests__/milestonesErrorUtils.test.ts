@@ -74,10 +74,35 @@ describe('milestonesErrorUtils', () => {
 
     it('handles hostile digest getter gracefully', () => {
       const error = new Error('x');
-      // @ts-expect-error - testing hostile property
-      error.digest = { get: () => { throw new Error('hostile'); } };
+      Object.defineProperty(error, 'digest', {
+        get: () => { throw new Error('hostile'); },
+        enumerable: true,
+        configurable: true,
+      });
       expect(() => getErrorIdentity(error)).not.toThrow();
       expect(getErrorIdentity(error)).toBe('object:Error:x');
+    });
+
+    it('handles hostile message getter gracefully', () => {
+      class HostileMessageError extends Error {
+        get message(): string {
+          throw new Error('message getter exploded');
+        }
+      }
+      const error = new HostileMessageError();
+      expect(() => getErrorIdentity(error)).not.toThrow();
+      expect(getErrorIdentity(error)).toBe('object:Error:');
+    });
+
+    it('handles hostile name getter gracefully', () => {
+      class HostileNameError extends Error {
+        get name(): string {
+          throw new Error('name getter exploded');
+        }
+      }
+      const error = new HostileNameError();
+      expect(() => getErrorIdentity(error)).not.toThrow();
+      expect(getErrorIdentity(error)).toBe('object:Error:');
     });
   });
 
@@ -112,6 +137,23 @@ describe('milestonesErrorUtils', () => {
       const error1 = new Error('error one');
       const error2 = new Error('error two');
       expect(hasSameErrorIdentity(error1, error2)).toBe(false);
+    });
+
+    it('returns true for duplicate digests across different error instances', () => {
+      const error1 = new Error('error one');
+      error1.digest = 'dup-digest';
+      const error2 = new Error('error two');
+      error2.digest = 'dup-digest';
+      expect(hasSameErrorIdentity(error1, error2)).toBe(true);
+    });
+
+    it('returns false when existing error has no identity', () => {
+      const error1 = new Error('error one');
+      expect(hasSameErrorIdentity(error1, new Error('error two'))).toBe(false);
+    });
+
+    it('returns false for undefined existing error', () => {
+      expect(hasSameErrorIdentity(undefined, new Error('test'))).toBe(false);
     });
   });
 });

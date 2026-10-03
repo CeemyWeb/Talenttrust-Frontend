@@ -55,8 +55,12 @@ export function ensureValidError(
 export function getErrorIdentity(
   error: NodeError & { digest?: string },
 ): string {
-  if (typeof error.digest === 'string' && error.digest.length > 0) {
-    return `digest:${error.digest}`;
+  try {
+    if (typeof error.digest === 'string' && error.digest.length > 0) {
+      return `digest:${error.digest}`;
+    }
+  } catch {
+    /* hostile digest getter — fall through to object identity */
   }
 
   // Fall back to a stable identity derived from the error object itself

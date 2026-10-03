@@ -37,11 +37,13 @@ export default function MilestonesError({ error, reset }: MilestonesErrorProps) 
   const retryCountRef = useRef<number>(0);
 
   useEffect(() => {
-    if (reportedError.current === error) return;
-    reportedError.current = error;
+    const validError = ensureValidError(error);
+    const errorId = getErrorIdentity(validError);
+    if (reportedError.current === errorId) return;
+    reportedError.current = errorId;
     setIsRetrying(false);
     setResetFailed(false);
-    reportError(error, 'Milestones page', 'error', {
+    reportError(validError, 'Milestones page', 'error', {
       code: MILESTONES_ROUTE_ERROR_CODE,
       name: 'Error',
     });
